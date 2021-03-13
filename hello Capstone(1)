@@ -1,1982 +1,589 @@
-
-Postal Codes in Canada
-Part 1
-
-Firstly, import all the necessary libraries.
-In [89]:
-
-# import all necessary libraries
-import pandas as pd
-import numpy as np
-from bs4 import BeautifulSoup
-import requests
-
-Now I can set url and request the html text from wikipedia. Then I will print the html to see what it looks like.
-In [90]:
-
-url = 'https://en.wikipedia.org/wiki/List_of_postal_codes_of_Canada:_M'
-
-html = requests.get(url).text
-#html
-
-We want to parse this mess to find the tables in the website. That's where our data will be.
-In [91]:
-
-# parse the data and find_all of the tables on the website
-soup = BeautifulSoup(html, 'html5lib')
-tables = soup.find_all('table')
-len(tables)
-
-Out[91]:
-
-3
-
-It appears there are a few tables on the webite, so we'll have to find the correct table index to get our info.
-In [92]:
-
-# since there are 3 tables, find out which table the data is in
-for index, table in enumerate(tables):
-    if ("wikitable" in str(table)):
-        table_index = index
-print(table_index)
-
-0
-
-Now, we can get all the info needed and put it into a dataframe. First, make an empty dataframe named  postal_codes 
-
-Then, find all the  tr and the  td within the HTML, strip the necessary parts and pop them into the dataframe.
-In [93]:
-
-# place all of the data into a dataframe
-
-postal_codes = pd.DataFrame(columns=["PostalCode", "Borough", "Neighborhood"])
-
-for row in tables[table_index].tbody.find_all("tr"): 
-    col = row.find_all("td")
-    if (col != []):
-        code = col[0].text.strip()
-        borough = col[1].text.strip()
-        neighborhood = col[2].text.strip()
-        postal_codes = postal_codes.append({"PostalCode":code, "Borough":borough, "Neighborhood":neighborhood}, ignore_index=True)
-
-postal_codes
-
-Out[93]:
-	PostalCode 	Borough 	Neighborhood
-0 	M1A 	Not assigned 	Not assigned
-1 	M2A 	Not assigned 	Not assigned
-2 	M3A 	North York 	Parkwoods
-3 	M4A 	North York 	Victoria Village
-4 	M5A 	Downtown Toronto 	Regent Park, Harbourfront
-... 	... 	... 	...
-175 	M5Z 	Not assigned 	Not assigned
-176 	M6Z 	Not assigned 	Not assigned
-177 	M7Z 	Not assigned 	Not assigned
-178 	M8Z 	Etobicoke 	Mimico NW, The Queensway West, South of Bloor,...
-179 	M9Z 	Not assigned 	Not assigned
-
-180 rows × 3 columns
-
-Save only the necessary data from the Borough, and lose the data that is not assigned or we can use
-In [94]:
-
-# get ride of all the Boroughs that are not assigned
-postal_codes = postal_codes[postal_codes.Borough != 'Not assigned']
-
-In [95]:
-
-# reset the index 
-postal_codes = postal_codes.reset_index(drop=True)
-postal_codes.head(12)
-
-Out[95]:
-	PostalCode 	Borough 	Neighborhood
-0 	M3A 	North York 	Parkwoods
-1 	M4A 	North York 	Victoria Village
-2 	M5A 	Downtown Toronto 	Regent Park, Harbourfront
-3 	M6A 	North York 	Lawrence Manor, Lawrence Heights
-4 	M7A 	Downtown Toronto 	Queen's Park, Ontario Provincial Government
-5 	M9A 	Etobicoke 	Islington Avenue, Humber Valley Village
-6 	M1B 	Scarborough 	Malvern, Rouge
-7 	M3B 	North York 	Don Mills
-8 	M4B 	East York 	Parkview Hill, Woodbine Gardens
-9 	M5B 	Downtown Toronto 	Garden District, Ryerson
-10 	M6B 	North York 	Glencairn
-11 	M9B 	Etobicoke 	West Deane Park, Princess Gardens, Martin Grov...
-In [105]:
-
-postal_codes = postal_codes.groupby(['PostalCode', 'Borough'])['Neighborhood'].apply(list)
-
-postal_codes = postal_codes.sample(frac=1).reset_index()
-postal_codes['Neighborhood'] = postal_codes['Neighborhood'].str.join(',')
-postal_codes.head()
-
-Out[105]:
-	PostalCode 	Borough 	Neighborhood
-0 	M9L 	North York 	Humber Summit
-1 	M2J 	North York 	Fairview, Henry Farm, Oriole
-2 	M6P 	West Toronto 	High Park, The Junction South
-3 	M1K 	Scarborough 	Kennedy Park, Ionview, East Birchmount Park
-4 	M1B 	Scarborough 	Malvern, Rouge
-In [106]:
-
-postal_codes.shape
-
-Out[106]:
-
-(103, 3)
-
-That's about it. Now we have some data that we can sort through and actually use.
-Part 2
-In [71]:
-
-pip install geocoder
-
-Requirement already satisfied: geocoder in /Library/Frameworks/Python.framework/Versions/3.7/lib/python3.7/site-packages (1.38.1)
-Requirement already satisfied: six in /Library/Frameworks/Python.framework/Versions/3.7/lib/python3.7/site-packages (from geocoder) (1.12.0)
-Requirement already satisfied: click in /Library/Frameworks/Python.framework/Versions/3.7/lib/python3.7/site-packages (from geocoder) (7.0)
-Requirement already satisfied: ratelim in /Library/Frameworks/Python.framework/Versions/3.7/lib/python3.7/site-packages (from geocoder) (0.1.6)
-Requirement already satisfied: future in /Library/Frameworks/Python.framework/Versions/3.7/lib/python3.7/site-packages (from geocoder) (0.18.2)
-Requirement already satisfied: requests in /Library/Frameworks/Python.framework/Versions/3.7/lib/python3.7/site-packages (from geocoder) (2.22.0)
-Requirement already satisfied: decorator in /Library/Frameworks/Python.framework/Versions/3.7/lib/python3.7/site-packages (from ratelim->geocoder) (4.4.0)
-Requirement already satisfied: chardet<3.1.0,>=3.0.2 in /Library/Frameworks/Python.framework/Versions/3.7/lib/python3.7/site-packages (from requests->geocoder) (3.0.4)
-Requirement already satisfied: urllib3!=1.25.0,!=1.25.1,<1.26,>=1.21.1 in /Library/Frameworks/Python.framework/Versions/3.7/lib/python3.7/site-packages (from requests->geocoder) (1.25.3)
-Requirement already satisfied: certifi>=2017.4.17 in /Library/Frameworks/Python.framework/Versions/3.7/lib/python3.7/site-packages (from requests->geocoder) (2019.6.16)
-Requirement already satisfied: idna<2.9,>=2.5 in /Library/Frameworks/Python.framework/Versions/3.7/lib/python3.7/site-packages (from requests->geocoder) (2.8)
-WARNING: You are using pip version 20.1; however, version 21.0.1 is available.
-You should consider upgrading via the '/Library/Frameworks/Python.framework/Versions/3.7/bin/python3.7 -m pip install --upgrade pip' command.
-Note: you may need to restart the kernel to use updated packages.
-
-In [72]:
-
-'''
-import geocoder # import geocoder
-
-# initialize your variable to None
-lat_lng_coords = None
-
-# loop until you get the coordinates
-while(lat_lng_coords is None):
-  g = geocoder.google('{}, Toronto, Ontario'.format(postal_codes))
-  lat_lng_coords = g.latlng
-
-latitude = lat_lng_coords[0]
-longitude = lat_lng_coords[1]
-
-'''
-
-Out[72]:
-
-"\nimport geocoder # import geocoder\n\n# initialize your variable to None\nlat_lng_coords = None\n\n# loop until you get the coordinates\nwhile(lat_lng_coords is None):\n  g = geocoder.google('{}, Toronto, Ontario'.format(postal_codes))\n  lat_lng_coords = g.latlng\n\nlatitude = lat_lng_coords[0]\nlongitude = lat_lng_coords[1]\n\n"
-
-In [107]:
-
-csv = 'Geospatial_Coordinates.csv'
-lat_long = pd.read_csv('/Users/jacobgood/Desktop/MOOCs for Money/Coursera/5. Applied Data Science Capstone/Week 3 - k-Means/Final Project/Geospatial_Coordinates.csv')
-
-Let's take a look at the datasets and them merge them together.
-In [108]:
-
-lat_long.head()
-
-Out[108]:
-	Postal Code 	Latitude 	Longitude
-0 	M1B 	43.806686 	-79.194353
-1 	M1C 	43.784535 	-79.160497
-2 	M1E 	43.763573 	-79.188711
-3 	M1G 	43.770992 	-79.216917
-4 	M1H 	43.773136 	-79.239476
-In [109]:
-
-postal_codes.head()
-
-Out[109]:
-	PostalCode 	Borough 	Neighborhood
-0 	M9L 	North York 	Humber Summit
-1 	M2J 	North York 	Fairview, Henry Farm, Oriole
-2 	M6P 	West Toronto 	High Park, The Junction South
-3 	M1K 	Scarborough 	Kennedy Park, Ionview, East Birchmount Park
-4 	M1B 	Scarborough 	Malvern, Rouge
-In [110]:
-
-lat_long.shape, postal_codes.shape
-
-Out[110]:
-
-((103, 3), (103, 3))
-
-Great! They're the same shape. This will be easy. Let's make sure the Postal Codes are sorted the same.
-In [111]:
-
-lat_long = lat_long.sort_values(by=['Postal Code'])
-lat_long
-
-Out[111]:
-	Postal Code 	Latitude 	Longitude
-0 	M1B 	43.806686 	-79.194353
-1 	M1C 	43.784535 	-79.160497
-2 	M1E 	43.763573 	-79.188711
-3 	M1G 	43.770992 	-79.216917
-4 	M1H 	43.773136 	-79.239476
-... 	... 	... 	...
-98 	M9N 	43.706876 	-79.518188
-99 	M9P 	43.696319 	-79.532242
-100 	M9R 	43.688905 	-79.554724
-101 	M9V 	43.739416 	-79.588437
-102 	M9W 	43.706748 	-79.594054
-
-103 rows × 3 columns
-In [112]:
-
-postal_codes = postal_codes.sort_values(by=['PostalCode'])
-postal_codes
-
-Out[112]:
-	PostalCode 	Borough 	Neighborhood
-4 	M1B 	Scarborough 	Malvern, Rouge
-20 	M1C 	Scarborough 	Rouge Hill, Port Union, Highland Creek
-92 	M1E 	Scarborough 	Guildwood, Morningside, West Hill
-70 	M1G 	Scarborough 	Woburn
-37 	M1H 	Scarborough 	Cedarbrae
-... 	... 	... 	...
-87 	M9N 	York 	Weston
-22 	M9P 	Etobicoke 	Westmount
-54 	M9R 	Etobicoke 	Kingsview Village, St. Phillips, Martin Grove ...
-56 	M9V 	Etobicoke 	South Steeles, Silverstone, Humbergate, Jamest...
-96 	M9W 	Etobicoke 	Northwest, West Humber - Clairville
-
-103 rows × 3 columns
-
-They all match up on this page, should be fine to merge now! First we'll match the latitudes and then match the longitudes. Check the first 15 to see how we did!
-In [113]:
-
-postal_codes['Latitude'] = lat_long['Latitude']
-postal_codes['Longitude'] = lat_long['Longitude']
-
-In [114]:
-
-postal_codes
-
-Out[114]:
-	PostalCode 	Borough 	Neighborhood 	Latitude 	Longitude
-4 	M1B 	Scarborough 	Malvern, Rouge 	43.773136 	-79.239476
-20 	M1C 	Scarborough 	Rouge Hill, Port Union, Highland Creek 	43.757490 	-79.374714
-92 	M1E 	Scarborough 	Guildwood, Morningside, West Hill 	43.628841 	-79.520999
-70 	M1G 	Scarborough 	Woburn 	43.648429 	-79.382280
-37 	M1H 	Scarborough 	Cedarbrae 	43.676357 	-79.293031
-... 	... 	... 	... 	... 	...
-87 	M9N 	York 	Weston 	43.662744 	-79.321558
-22 	M9P 	Etobicoke 	Westmount 	43.770120 	-79.408493
-54 	M9R 	Etobicoke 	Kingsview Village, St. Phillips, Martin Grove ... 	43.657162 	-79.378937
-56 	M9V 	Etobicoke 	South Steeles, Silverstone, Humbergate, Jamest... 	43.644771 	-79.373306
-96 	M9W 	Etobicoke 	Northwest, West Humber - Clairville 	43.756303 	-79.565963
-
-103 rows × 5 columns
-In [ ]:
-
-
-Part 3
-
-Import libraries that we need for this part of the project.
-In [151]:
-
-from sklearn.cluster import KMeans
-import folium
-from geopy.geocoders import Nominatim
-
-Cluster the Neighborhoods
-In [115]:
-
-# let's rename the postal_codes to toronto_data
-toronto_data = postal_codes
-toronto_data
-
-Out[115]:
-	PostalCode 	Borough 	Neighborhood 	Latitude 	Longitude
-4 	M1B 	Scarborough 	Malvern, Rouge 	43.773136 	-79.239476
-20 	M1C 	Scarborough 	Rouge Hill, Port Union, Highland Creek 	43.757490 	-79.374714
-92 	M1E 	Scarborough 	Guildwood, Morningside, West Hill 	43.628841 	-79.520999
-70 	M1G 	Scarborough 	Woburn 	43.648429 	-79.382280
-37 	M1H 	Scarborough 	Cedarbrae 	43.676357 	-79.293031
-... 	... 	... 	... 	... 	...
-87 	M9N 	York 	Weston 	43.662744 	-79.321558
-22 	M9P 	Etobicoke 	Westmount 	43.770120 	-79.408493
-54 	M9R 	Etobicoke 	Kingsview Village, St. Phillips, Martin Grove ... 	43.657162 	-79.378937
-56 	M9V 	Etobicoke 	South Steeles, Silverstone, Humbergate, Jamest... 	43.644771 	-79.373306
-96 	M9W 	Etobicoke 	Northwest, West Humber - Clairville 	43.756303 	-79.565963
-
-103 rows × 5 columns
-
-Let's use the geocoder to get the starting location for Toronto, Canada. Save the latitude and longitude for later.
-In [116]:
-
-address = 'Toronto, Canada'
-
-geolocator = Nominatim(user_agent='tor_explorer')
-location = geolocator.geocode(address)
-latitude = location.latitude
-longitude = location.longitude
-print('The geographical coordinates of Toronto are {}, {}.'.format(latitude, longitude))
-
-The geographical coordinates of Toronto are 43.6534817, -79.3839347.
-
-We can visualize the neighborhoods in Toronto now that we've got the Latitude and Longitude.
-In [117]:
-
-# create map of Toronto using latitude and longitude values
-map_toronto = folium.Map(location=[latitude, longitude], zoom_start=10)
-
-# add markers to map
-for lat, lng, borough, neighborhood in zip(toronto_data['Latitude'], toronto_data['Longitude'], toronto_data['Borough'], toronto_data['Neighborhood']):
-    label = '{}, {}'.format(neighborhood, borough)
-    label = folium.Popup(label, parse_html=True)
-    folium.CircleMarker(
-        [lat, lng],
-        radius=5,
-        popup=label,
-        color='blue',
-        fill=True,
-        fill_color='#3186cc',
-        fill_opacity=0.7,
-        parse_html=False).add_to(map_toronto)  
-    
-map_toronto
-
-Out[117]:
-Make this Notebook Trusted to load map: File -> Trust Notebook
-
-Let's just review a bit of what we're looking at. This is the data that we've identified in the map. Postal Codes, Borough, Neighborhood, Latitude, and Longitude.
-In [118]:
-
-toronto_data.head()
-
-Out[118]:
-	PostalCode 	Borough 	Neighborhood 	Latitude 	Longitude
-4 	M1B 	Scarborough 	Malvern, Rouge 	43.773136 	-79.239476
-20 	M1C 	Scarborough 	Rouge Hill, Port Union, Highland Creek 	43.757490 	-79.374714
-92 	M1E 	Scarborough 	Guildwood, Morningside, West Hill 	43.628841 	-79.520999
-70 	M1G 	Scarborough 	Woburn 	43.648429 	-79.382280
-37 	M1H 	Scarborough 	Cedarbrae 	43.676357 	-79.293031
-
-Here I can use the Foursquare API to explore the neighborhoods and see what each has to offer. We'll also segment them.
-First let's save some data
-In [119]:
-
-CLIENT_ID = '5OMXBU3ZGRZA5BCARJRRJ12VXI4MNWEYKWMRJYM4SOOTUODX' # your Foursquare ID
-CLIENT_SECRET = 'TRRWL1N24Z54AUJQZZVJESAZGBVNOD5YSD3HOKMIQLBOXWKQ' # your Foursquare Secret
-VERSION = '20180605' # Foursquare API version
-LIMIT = 100 # A default Foursquare API limit value
-
-print('Your credentails:')
-print('CLIENT_ID: ' + CLIENT_ID)
-print('CLIENT_SECRET:' + CLIENT_SECRET)
-
-Your credentails:
-CLIENT_ID: 5OMXBU3ZGRZA5BCARJRRJ12VXI4MNWEYKWMRJYM4SOOTUODX
-CLIENT_SECRET:TRRWL1N24Z54AUJQZZVJESAZGBVNOD5YSD3HOKMIQLBOXWKQ
-
-Now let's explore the neighborhoods in the dataframe
-In [120]:
-
-toronto_data.loc[0, 'Neighborhood']
-
-Out[120]:
-
-'Humber Summit'
-
-Get the neighborhood's latitude and longtitude
-In [121]:
-
-neighborhood_latitude = toronto_data.loc[0, 'Latitude'] # neighborhood latitude value
-neighborhood_longitude = toronto_data.loc[0, 'Longitude'] # neighborhood longitude value
-
-neighborhood_name = toronto_data.loc[0, 'Neighborhood'] # neighborhood name
-
-print('Latitude and longitude values of {} are {}, {}.'.format(neighborhood_name, 
-                                                               neighborhood_latitude, 
-                                                               neighborhood_longitude))
-
-Latitude and longitude values of Humber Summit are 43.806686299999996, -79.19435340000001.
-
-Top 100 VENUES in the Humber Summit area within a radius of 500 meters
-In [122]:
-
-# we'll limit the venues to 100 and get a radius of 500 m
-
-LIMIT = 100
-radius = 500
-
-url = 'https://api.foursquare.com/v2/venues/explore?&client_id={}&client_secret={}&v={}&ll={},{}&radius={}&limit={}'.format(
-            CLIENT_ID, 
-            CLIENT_SECRET, 
-            VERSION, 
-            lat, 
-            lng, 
-            radius, 
-            LIMIT)
-
-In [123]:
-
-results = requests.get(url).json()
-results
-
-Out[123]:
-
-{'meta': {'code': 200, 'requestId': '604cb3595c9e6424598c3df2'},
- 'response': {'warning': {'text': "There aren't a lot of results near you. Try something more general, reset your filters, or expand the search area."},
-  'headerLocation': 'Humber Summit',
-  'headerFullLocation': 'Humber Summit, Toronto',
-  'headerLocationGranularity': 'neighborhood',
-  'totalResults': 3,
-  'suggestedBounds': {'ne': {'lat': 43.7608033045, 'lng': -79.55974472346225},
-   'sw': {'lat': 43.7518032955, 'lng': -79.57218187653774}},
-  'groups': [{'type': 'Recommended Places',
-    'name': 'recommended',
-    'items': [{'reasons': {'count': 0,
-       'items': [{'summary': 'This spot is popular',
-         'type': 'general',
-         'reasonName': 'globalInteractionReason'}]},
-      'venue': {'id': '54fb21be498e513a0a853128',
-       'name': 'HNS ARARAT',
-       'location': {'address': '153 Milvan Dr #2B',
-        'lat': 43.75751884568645,
-        'lng': -79.5636534690857,
-        'labeledLatLngs': [{'label': 'display',
-          'lat': 43.75751884568645,
-          'lng': -79.5636534690857}],
-        'distance': 229,
-        'postalCode': 'M9L 1Z8',
-        'cc': 'CA',
-        'city': 'North York',
-        'state': 'ON',
-        'country': 'Canada',
-        'formattedAddress': ['153 Milvan Dr #2B',
-         'North York ON M9L 1Z8',
-         'Canada']},
-       'categories': [{'id': '4bf58dd8d48988d1f8941735',
-         'name': 'Furniture / Home Store',
-         'pluralName': 'Furniture / Home Stores',
-         'shortName': 'Furniture / Home',
-         'icon': {'prefix': 'https://ss3.4sqi.net/img/categories_v2/shops/furniture_',
-          'suffix': '.png'},
-         'primary': True}],
-       'photos': {'count': 0, 'groups': []}},
-      'referralId': 'e-0-54fb21be498e513a0a853128-0'},
-     {'reasons': {'count': 0,
-       'items': [{'summary': 'This spot is popular',
-         'type': 'general',
-         'reasonName': 'globalInteractionReason'}]},
-      'venue': {'id': '4ff70a1be4b02089186eed76',
-       'name': 'Islington & Finch',
-       'location': {'lat': 43.75464649425455,
-        'lng': -79.56863832071625,
-        'labeledLatLngs': [{'label': 'display',
-          'lat': 43.75464649425455,
-          'lng': -79.56863832071625}],
-        'distance': 283,
-        'cc': 'CA',
-        'neighborhood': 'Humber Summit',
-        'city': 'Toronto',
-        'state': 'ON',
-        'country': 'Canada',
-        'formattedAddress': ['Toronto ON', 'Canada']},
-       'categories': [{'id': '52f2ab2ebcbc57f1066b8b4c',
-         'name': 'Intersection',
-         'pluralName': 'Intersections',
-         'shortName': 'Intersection',
-         'icon': {'prefix': 'https://ss3.4sqi.net/img/categories_v2/travel/default_',
-          'suffix': '.png'},
-         'primary': True}],
-       'photos': {'count': 0, 'groups': []}},
-      'referralId': 'e-0-4ff70a1be4b02089186eed76-1'},
-     {'reasons': {'count': 0,
-       'items': [{'summary': 'This spot is popular',
-         'type': 'general',
-         'reasonName': 'globalInteractionReason'}]},
-      'venue': {'id': '567f0e89498e729ea3611447',
-       'name': 'Dryshield Waterproofing',
-       'location': {'address': '60 Millwick Dr',
-        'lat': 43.758994,
-        'lng': -79.561762,
-        'labeledLatLngs': [{'label': 'display',
-          'lat': 43.758994,
-          'lng': -79.561762}],
-        'distance': 451,
-        'postalCode': 'M9L 1Y3',
-        'cc': 'CA',
-        'city': 'North York',
-        'state': 'ON',
-        'country': 'Canada',
-        'formattedAddress': ['60 Millwick Dr',
-         'North York ON M9L 1Y3',
-         'Canada']},
-       'categories': [{'id': '5454144b498ec1f095bff2f2',
-         'name': 'Construction & Landscaping',
-         'pluralName': 'Construction & Landscaping',
-         'shortName': 'Construction',
-         'icon': {'prefix': 'https://ss3.4sqi.net/img/categories_v2/shops/realestate_',
-          'suffix': '.png'},
-         'primary': True}],
-       'photos': {'count': 0, 'groups': []}},
-      'referralId': 'e-0-567f0e89498e729ea3611447-2'}]}]}}
-
-I'm borrowing a get_category_type here from our labs in the previous section while using Foursquare API.
-In [124]:
-
-# function that extracts the category of the venue
-def get_category_type(row):
-    try:
-        categories_list = row['categories']
-    except:
-        categories_list = row['venue.categories']
-        
-    if len(categories_list) == 0:
-        return None
-    else:
-        return categories_list[0]['name']
-
-Clean the json we just downloaded and then pop it into a pandas dataframe
-In [125]:
-
-# I had to specifically import the json_normalize for some reason
-from pandas.io.json import json_normalize
-
-In [126]:
-
-venues = results['response']['groups'][0]['items']
-    
-nearby_venues = json_normalize(venues) # flatten JSON
-
-# filter columns
-filtered_columns = ['venue.name', 'venue.categories', 'venue.location.lat', 'venue.location.lng']
-nearby_venues =nearby_venues.loc[:, filtered_columns]
-
-# filter the category for each row
-nearby_venues['venue.categories'] = nearby_venues.apply(get_category_type, axis=1)
-
-# clean columns
-nearby_venues.columns = [col.split(".")[-1] for col in nearby_venues.columns]
-
-nearby_venues.head()
-
-Out[126]:
-	name 	categories 	lat 	lng
-0 	HNS ARARAT 	Furniture / Home Store 	43.757519 	-79.563653
-1 	Islington & Finch 	Intersection 	43.754646 	-79.568638
-2 	Dryshield Waterproofing 	Construction & Landscaping 	43.758994 	-79.561762
-In [127]:
-
-print('{} venues were returned by Foursquare.'.format(nearby_venues.shape[0]))
-
-3 venues were returned by Foursquare.
-
-That doesn't look like a promising figure for entertainment. We'll just get all the neighborhoods and venues in those neighborhoods. This will be a bunch.
-In [128]:
-
-def getNearbyVenues(names, latitudes, longitudes, radius=500):
-    
-    venues_list=[]
-    for name, lat, lng in zip(names, latitudes, longitudes):
-        print(name)
-            
-        # create the API request URL
-        url = 'https://api.foursquare.com/v2/venues/explore?&client_id={}&client_secret={}&v={}&ll={},{}&radius={}&limit={}'.format(
-            CLIENT_ID, 
-            CLIENT_SECRET, 
-            VERSION, 
-            lat, 
-            lng, 
-            radius, 
-            LIMIT)
-            
-        # make the GET request
-        results = requests.get(url).json()["response"]['groups'][0]['items']
-        
-        # return only relevant information for each nearby venue
-        venues_list.append([(
-            name, 
-            lat, 
-            lng, 
-            v['venue']['name'], 
-            v['venue']['location']['lat'], 
-            v['venue']['location']['lng'],  
-            v['venue']['categories'][0]['name']) for v in results])
-
-    nearby_venues = pd.DataFrame([item for venue_list in venues_list for item in venue_list])
-    nearby_venues.columns = ['Neighborhood', 
-                  'Neighborhood Latitude', 
-                  'Neighborhood Longitude', 
-                  'Venue', 
-                  'Venue Latitude', 
-                  'Venue Longitude', 
-                  'Venue Category']
-    
-    return(nearby_venues)
-
-In [130]:
-
-toronto_venues = getNearbyVenues(names=toronto_data['Neighborhood'], 
-                                  latitudes=toronto_data['Latitude'], 
-                                  longitudes=toronto_data['Longitude'])
-
-Malvern, Rouge
-Rouge Hill, Port Union, Highland Creek
-Guildwood, Morningside, West Hill
-Woburn
-Cedarbrae
-Scarborough Village
-Kennedy Park, Ionview, East Birchmount Park
-Golden Mile, Clairlea, Oakridge
-Cliffside, Cliffcrest, Scarborough Village West
-Birch Cliff, Cliffside West
-Dorset Park, Wexford Heights, Scarborough Town Centre
-Wexford, Maryvale
-Agincourt
-Clarks Corners, Tam O'Shanter, Sullivan
-Milliken, Agincourt North, Steeles East, L'Amoreaux East
-Steeles West, L'Amoreaux West
-Upper Rouge
-Hillcrest Village
-Fairview, Henry Farm, Oriole
-Bayview Village
-York Mills, Silver Hills
-Willowdale, Newtonbrook
-Willowdale, Willowdale East
-York Mills West
-Willowdale, Willowdale West
-Parkwoods
-Don Mills
-Don Mills
-Bathurst Manor, Wilson Heights, Downsview North
-Northwood Park, York University
-Downsview
-Downsview
-Downsview
-Downsview
-Victoria Village
-Parkview Hill, Woodbine Gardens
-Woodbine Heights
-The Beaches
-Leaside
-Thorncliffe Park
-East Toronto, Broadview North (Old East York)
-The Danforth West, Riverdale
-India Bazaar, The Beaches West
-Studio District
-Lawrence Park
-Davisville North
-North Toronto West,  Lawrence Park
-Davisville
-Moore Park, Summerhill East
-Summerhill West, Rathnelly, South Hill, Forest Hill SE, Deer Park
-Rosedale
-St. James Town, Cabbagetown
-Church and Wellesley
-Regent Park, Harbourfront
-Garden District, Ryerson
-St. James Town
-Berczy Park
-Central Bay Street
-Richmond, Adelaide, King
-Harbourfront East, Union Station, Toronto Islands
-Toronto Dominion Centre, Design Exchange
-Commerce Court, Victoria Hotel
-Bedford Park, Lawrence Manor East
-Roselawn
-Forest Hill North & West, Forest Hill Road Park
-The Annex, North Midtown, Yorkville
-University of Toronto, Harbord
-Kensington Market, Chinatown, Grange Park
-CN Tower, King and Spadina, Railway Lands, Harbourfront West, Bathurst Quay, South Niagara, Island airport
-Stn A PO Boxes
-First Canadian Place, Underground city
-Lawrence Manor, Lawrence Heights
-Glencairn
-Humewood-Cedarvale
-Caledonia-Fairbanks
-Christie
-Dufferin, Dovercourt Village
-Little Portugal, Trinity
-Brockton, Parkdale Village, Exhibition Place
-North Park, Maple Leaf Park, Upwood Park
-Del Ray, Mount Dennis, Keelsdale and Silverthorn
-Runnymede, The Junction, Weston-Pellam Park, Carlton Village
-High Park, The Junction South
-Parkdale, Roncesvalles
-Runnymede, Swansea
-Queen's Park, Ontario Provincial Government
-Canada Post Gateway Processing Centre
-Business reply mail Processing Centre, South Central Letter Processing Plant Toronto
-New Toronto, Mimico South, Humber Bay Shores
-Alderwood, Long Branch
-The Kingsway, Montgomery Road, Old Mill North
-Old Mill South, King's Mill Park, Sunnylea, Humber Bay, Mimico NE, The Queensway East, Royal York South East, Kingsway Park South East
-Mimico NW, The Queensway West, South of Bloor, Kingsway Park South West, Royal York South West
-Islington Avenue, Humber Valley Village
-West Deane Park, Princess Gardens, Martin Grove, Islington, Cloverdale
-Eringate, Bloordale Gardens, Old Burnhamthorpe, Markland Wood
-Humber Summit
-Humberlea, Emery
-Weston
-Westmount
-Kingsview Village, St. Phillips, Martin Grove Gardens, Richview Gardens
-South Steeles, Silverstone, Humbergate, Jamestown, Mount Olive, Beaumond Heights, Thistletown, Albion Gardens
-Northwest, West Humber - Clairville
-
-In [131]:
-
-toronto_data['Neighborhood'].value_counts()
-
-Out[131]:
-
-Downsview                                                                                                                                 4
-Don Mills                                                                                                                                 2
-Parkview Hill, Woodbine Gardens                                                                                                           1
-Old Mill South, King's Mill Park, Sunnylea, Humber Bay, Mimico NE, The Queensway East, Royal York South East, Kingsway Park South East    1
-Studio District                                                                                                                           1
-                                                                                                                                         ..
-Fairview, Henry Farm, Oriole                                                                                                              1
-Davisville                                                                                                                                1
-Canada Post Gateway Processing Centre                                                                                                     1
-Northwood Park, York University                                                                                                           1
-Scarborough Village                                                                                                                       1
-Name: Neighborhood, Length: 99, dtype: int64
-
-How big is the dataframe with all of the Toronto venues? Let's take a look.
-In [132]:
-
-print(toronto_venues.shape)
-toronto_venues.head()
-
-(2124, 7)
-
-Out[132]:
-	Neighborhood 	Neighborhood Latitude 	Neighborhood Longitude 	Venue 	Venue Latitude 	Venue Longitude 	Venue Category
-0 	Malvern, Rouge 	43.773136 	-79.239476 	Federick Restaurant 	43.774697 	-79.241142 	Hakka Restaurant
-1 	Malvern, Rouge 	43.773136 	-79.239476 	Drupati's Roti & Doubles 	43.775222 	-79.241678 	Caribbean Restaurant
-2 	Malvern, Rouge 	43.773136 	-79.239476 	Thai One On 	43.774468 	-79.241268 	Thai Restaurant
-3 	Malvern, Rouge 	43.773136 	-79.239476 	Centennial Recreation Centre 	43.774593 	-79.236500 	Athletics & Sports
-4 	Malvern, Rouge 	43.773136 	-79.239476 	TD Canada Trust 	43.774830 	-79.241251 	Bank
-
-We'll look at more details of the various neighborhoods to see how many venues were returend for each neighborhood.
-In [133]:
-
-toronto_venues.groupby('Neighborhood').count()
-
-Out[133]:
-	Neighborhood Latitude 	Neighborhood Longitude 	Venue 	Venue Latitude 	Venue Longitude 	Venue Category
-Neighborhood 						
-Agincourt 	100 	100 	100 	100 	100 	100
-Alderwood, Long Branch 	31 	31 	31 	31 	31 	31
-Bathurst Manor, Wilson Heights, Downsview North 	10 	10 	10 	10 	10 	10
-Bayview Village 	14 	14 	14 	14 	14 	14
-Bedford Park, Lawrence Manor East 	3 	3 	3 	3 	3 	3
-... 	... 	... 	... 	... 	... 	...
-Willowdale, Willowdale West 	4 	4 	4 	4 	4 	4
-Woburn 	100 	100 	100 	100 	100 	100
-Woodbine Heights 	2 	2 	2 	2 	2 	2
-York Mills West 	9 	9 	9 	9 	9 	9
-York Mills, Silver Hills 	17 	17 	17 	17 	17 	17
-
-96 rows × 6 columns
-What about the unique categories that can be curated from the venue list?
-In [134]:
-
-print('There are {} uniques categories.'.format(len(toronto_venues['Venue Category'].unique())))
-
-There are 274 uniques categories.
-
-Analyze the neighborhoods
-In [136]:
-
-# one hot encoding
-toronto_onehot = pd.get_dummies(toronto_venues[['Venue Category']], prefix="", prefix_sep="")
-
-# add neighborhood column back to dataframe
-toronto_onehot['Neighborhood'] = toronto_venues['Neighborhood'] 
-
-# move neighborhood column to the first column
-fixed_columns = [toronto_onehot.columns[-1]] + list(toronto_onehot.columns[:-1])
-toronto_onehot = toronto_onehot[fixed_columns]
-
-toronto_onehot.head()
-
-Out[136]:
-	Yoga Studio 	Accessories Store 	Adult Boutique 	Airport 	Airport Food Court 	Airport Lounge 	Airport Service 	Airport Terminal 	American Restaurant 	Antique Shop 	... 	Trail 	Train Station 	Truck Stop 	Vegetarian / Vegan Restaurant 	Video Game Store 	Vietnamese Restaurant 	Warehouse Store 	Wine Bar 	Wings Joint 	Women's Store
-0 	0 	0 	0 	0 	0 	0 	0 	0 	0 	0 	... 	0 	0 	0 	0 	0 	0 	0 	0 	0 	0
-1 	0 	0 	0 	0 	0 	0 	0 	0 	0 	0 	... 	0 	0 	0 	0 	0 	0 	0 	0 	0 	0
-2 	0 	0 	0 	0 	0 	0 	0 	0 	0 	0 	... 	0 	0 	0 	0 	0 	0 	0 	0 	0 	0
-3 	0 	0 	0 	0 	0 	0 	0 	0 	0 	0 	... 	0 	0 	0 	0 	0 	0 	0 	0 	0 	0
-4 	0 	0 	0 	0 	0 	0 	0 	0 	0 	0 	... 	0 	0 	0 	0 	0 	0 	0 	0 	0 	0
-
-5 rows × 274 columns
-
-Check the size of the new dataframe.
-In [138]:
-
-toronto_onehot.shape
-
-Out[138]:
-
-(2124, 274)
-
-Next, let's group rows by neighborhood and by taking the mean of the frequency of occurrence of each category
-In [140]:
-
-toronto_grouped = toronto_onehot.groupby('Neighborhood').mean().reset_index()
-toronto_grouped
-
-Out[140]:
-	Neighborhood 	Yoga Studio 	Accessories Store 	Adult Boutique 	Airport 	Airport Food Court 	Airport Lounge 	Airport Service 	Airport Terminal 	American Restaurant 	... 	Trail 	Train Station 	Truck Stop 	Vegetarian / Vegan Restaurant 	Video Game Store 	Vietnamese Restaurant 	Warehouse Store 	Wine Bar 	Wings Joint 	Women's Store
-0 	Agincourt 	0.000000 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0 	0.03 	... 	0.0 	0.00 	0.0 	0.02 	0.0 	0.0 	0.0 	0.01 	0.0 	0.0
-1 	Alderwood, Long Branch 	0.032258 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0 	0.00 	... 	0.0 	0.00 	0.0 	0.00 	0.0 	0.0 	0.0 	0.00 	0.0 	0.0
-2 	Bathurst Manor, Wilson Heights, Downsview North 	0.000000 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0 	0.00 	... 	0.0 	0.00 	0.0 	0.00 	0.0 	0.0 	0.0 	0.00 	0.0 	0.0
-3 	Bayview Village 	0.000000 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0 	0.00 	... 	0.0 	0.00 	0.0 	0.00 	0.0 	0.0 	0.0 	0.00 	0.0 	0.0
-4 	Bedford Park, Lawrence Manor East 	0.000000 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0 	0.00 	... 	0.0 	0.00 	0.0 	0.00 	0.0 	0.0 	0.0 	0.00 	0.0 	0.0
-... 	... 	... 	... 	... 	... 	... 	... 	... 	... 	... 	... 	... 	... 	... 	... 	... 	... 	... 	... 	... 	...
-91 	Willowdale, Willowdale West 	0.000000 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0 	0.00 	... 	0.0 	0.00 	0.0 	0.00 	0.0 	0.0 	0.0 	0.00 	0.0 	0.0
-92 	Woburn 	0.000000 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0 	0.03 	... 	0.0 	0.01 	0.0 	0.01 	0.0 	0.0 	0.0 	0.01 	0.0 	0.0
-93 	Woodbine Heights 	0.000000 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0 	0.00 	... 	0.0 	0.00 	0.0 	0.00 	0.0 	0.0 	0.0 	0.00 	0.0 	0.0
-94 	York Mills West 	0.000000 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0 	0.00 	... 	0.0 	0.00 	0.0 	0.00 	0.0 	0.0 	0.0 	0.00 	0.0 	0.0
-95 	York Mills, Silver Hills 	0.000000 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0 	0.0 	0.00 	... 	0.0 	0.00 	0.0 	0.00 	0.0 	0.0 	0.0 	0.00 	0.0 	0.0
-
-96 rows × 274 columns
-Confirm the new size
-In [143]:
-
-toronto_grouped.shape
-
-Out[143]:
-
-(96, 274)
-
-Print out each neighborhood with the top 5 most common venue
-In [144]:
-
-num_top_venues = 5
-
-for hood in toronto_grouped['Neighborhood']:
-    print("----"+hood+"----")
-    temp = toronto_grouped[toronto_grouped['Neighborhood'] == hood].T.reset_index()
-    temp.columns = ['venue','freq']
-    temp = temp.iloc[1:]
-    temp['freq'] = temp['freq'].astype(float)
-    temp = temp.round({'freq': 2})
-    print(temp.sort_values('freq', ascending=False).reset_index(drop=True).head(num_top_venues))
-    print('\n')
-
-----Agincourt----
-         venue  freq
-0  Coffee Shop  0.13
-1   Restaurant  0.07
-2         Café  0.06
-3        Hotel  0.05
-4          Gym  0.04
-
-
-----Alderwood, Long Branch----
-                venue  freq
-0         Coffee Shop  0.19
-1               Diner  0.06
-2    Sushi Restaurant  0.06
-3         Yoga Studio  0.03
-4  Italian Restaurant  0.03
-
-
-----Bathurst Manor, Wilson Heights, Downsview North----
-            venue  freq
-0     Pizza Place   0.2
-1             Pub   0.1
-2        Pharmacy   0.1
-3  Sandwich Place   0.1
-4             Gym   0.1
-
-
-----Bayview Village----
-                         venue  freq
-0               Breakfast Spot  0.14
-1                    Gift Shop  0.14
-2                  Coffee Shop  0.07
-3  Eastern European Restaurant  0.07
-4                          Bar  0.07
-
-
-----Bedford Park, Lawrence Manor East----
-                        venue  freq
-0                        Park  0.33
-1  Construction & Landscaping  0.33
-2           Convenience Store  0.33
-3                 Yoga Studio  0.00
-4               Metro Station  0.00
-
-
-----Berczy Park----
-                venue  freq
-0         Pizza Place  0.17
-1         Flea Market  0.08
-2  Athletics & Sports  0.08
-3                Café  0.08
-4      Breakfast Spot  0.08
-
-
-----Birch Cliff, Cliffside West----
-                        venue  freq
-0                      Bakery  0.25
-1                        Park  0.25
-2  Construction & Landscaping  0.25
-3              Massage Studio  0.25
-4                 Yoga Studio  0.00
-
-
-----Brockton, Parkdale Village, Exhibition Place----
-                  venue  freq
-0        Clothing Store  0.16
-1           Coffee Shop  0.08
-2  Fast Food Restaurant  0.06
-3            Restaurant  0.05
-4         Women's Store  0.03
-
-
-----Business reply mail Processing Centre, South Central Letter Processing Plant Toronto----
-                             venue  freq
-0                     Intersection  0.33
-1                             Park  0.33
-2                       Playground  0.33
-3                    Metro Station  0.00
-4  Molecular Gastronomy Restaurant  0.00
-
-
-----CN Tower, King and Spadina, Railway Lands, Harbourfront West, Bathurst Quay, South Niagara, Island airport----
-                 venue  freq
-0  Rental Car Location  0.33
-1            Drugstore  0.33
-2           Truck Stop  0.33
-3          Yoga Studio  0.00
-4        Metro Station  0.00
-
-
-----Caledonia-Fairbanks----
-                           venue  freq
-0                    Coffee Shop  0.07
-1                           Café  0.07
-2          Vietnamese Restaurant  0.05
-3             Mexican Restaurant  0.05
-4  Vegetarian / Vegan Restaurant  0.05
-
-
-----Canada Post Gateway Processing Centre----
-                 venue  freq
-0      Airport Service  0.19
-1     Airport Terminal  0.12
-2      Harbor / Marina  0.06
-3                  Bar  0.06
-4  Rental Car Location  0.06
-
-
-----Cedarbrae----
-                             venue  freq
-0                            Trail  0.25
-1                Health Food Store  0.25
-2                              Pub  0.25
-3                      Yoga Studio  0.00
-4  Molecular Gastronomy Restaurant  0.00
-
-
-----Central Bay Street----
-           venue  freq
-0           Park  0.33
-1    Swim School  0.33
-2       Bus Line  0.33
-3    Yoga Studio  0.00
-4  Metro Station  0.00
-
-
-----Christie----
-           venue  freq
-0  Grocery Store  0.33
-1          Hotel  0.17
-2           Park  0.17
-3           Bank  0.17
-4  Shopping Mall  0.17
-
-
-----Church and Wellesley----
-                        venue  freq
-0                        Park   0.5
-1           Convenience Store   0.5
-2                 Yoga Studio   0.0
-3                 Men's Store   0.0
-4  Modern European Restaurant   0.0
-
-
-----Clarks Corners, Tam O'Shanter, Sullivan----
-                        venue  freq
-0                        Park  0.50
-1               Women's Store  0.25
-2                        Pool  0.25
-3                 Men's Store  0.00
-4  Modern European Restaurant  0.00
-
-
-----Cliffside, Cliffcrest, Scarborough Village West----
-                 venue  freq
-0          Coffee Shop  0.08
-1              Brewery  0.05
-2            Gastropub  0.05
-3                 Café  0.05
-4  American Restaurant  0.05
-
-
-----Commerce Court, Victoria Hotel----
-                venue  freq
-0      Discount Store  0.17
-1          Hobby Shop  0.17
-2   Convenience Store  0.17
-3  Chinese Restaurant  0.17
-4    Department Store  0.17
-
-
-----Davisville----
-                       venue  freq
-0          Indian Restaurant  0.09
-1                Yoga Studio  0.05
-2  Middle Eastern Restaurant  0.05
-3               Burger Joint  0.05
-4             Sandwich Place  0.05
-
-
-----Davisville North----
-                venue  freq
-0    Business Service  0.33
-1      Baseball Field  0.33
-2          Food Truck  0.33
-3         Yoga Studio  0.00
-4  Mexican Restaurant  0.00
-
-
-----Del Ray, Mount Dennis, Keelsdale and Silverthorn----
-                             venue  freq
-0                           Lawyer   1.0
-1                      Yoga Studio   0.0
-2                    Metro Station   0.0
-3  Molecular Gastronomy Restaurant   0.0
-4       Modern European Restaurant   0.0
-
-
-----Don Mills----
-                    venue  freq
-0             Coffee Shop  0.10
-1     Sporting Goods Shop  0.08
-2  Furniture / Home Store  0.05
-3            Burger Joint  0.05
-4           Shopping Mall  0.05
-
-
-----Downsview----
-                venue  freq
-0                Park  0.12
-1  Athletics & Sports  0.12
-2         Pizza Place  0.06
-3               Trail  0.06
-4          Beer Store  0.06
-
-
-----Dufferin, Dovercourt Village----
-           venue  freq
-0           Bank  0.09
-1    Coffee Shop  0.09
-2    Pizza Place  0.05
-3      Gift Shop  0.05
-4  Shopping Mall  0.05
-
-
-----East Toronto, Broadview North (Old East York)----
-                 venue  freq
-0           Restaurant   0.1
-1           Beer Store   0.1
-2  Sporting Goods Shop   0.1
-3          Coffee Shop   0.1
-4                  Gym   0.1
-
-
-----Eringate, Bloordale Gardens, Old Burnhamthorpe, Markland Wood----
-                    venue  freq
-0        Greek Restaurant  0.19
-1             Coffee Shop  0.09
-2      Italian Restaurant  0.07
-3  Furniture / Home Store  0.05
-4          Ice Cream Shop  0.05
-
-
-----Fairview, Henry Farm, Oriole----
-                        venue  freq
-0                         Bar   1.0
-1                 Yoga Studio   0.0
-2               Metro Station   0.0
-3  Modern European Restaurant   0.0
-4           Mobile Phone Shop   0.0
-
-
-----First Canadian Place, Underground city----
-                       venue  freq
-0  Middle Eastern Restaurant  0.29
-1                Auto Garage  0.14
-2                     Bakery  0.14
-3                 Smoke Shop  0.14
-4             Sandwich Place  0.14
-
-
-----Forest Hill North & West, Forest Hill Road Park----
-                           venue  freq
-0  Paper / Office Supplies Store   0.5
-1                 Baseball Field   0.5
-2                    Yoga Studio   0.0
-3                  Metro Station   0.0
-4     Modern European Restaurant   0.0
-
-
-----Garden District, Ryerson----
-              venue  freq
-0              Café  0.09
-1       Coffee Shop  0.09
-2               Pub  0.06
-3       Pizza Place  0.06
-4  Sushi Restaurant  0.06
-
-
-----Glencairn----
-                        venue  freq
-0                  Playground   1.0
-1                 Yoga Studio   0.0
-2                 Men's Store   0.0
-3  Modern European Restaurant   0.0
-4           Mobile Phone Shop   0.0
-
-
-----Golden Mile, Clairlea, Oakridge----
-            venue  freq
-0     Pizza Place  0.09
-1  Sandwich Place  0.09
-2    Dessert Shop  0.09
-3             Gym  0.06
-4            Café  0.06
-
-
-----Guildwood, Morningside, West Hill----
-             venue  freq
-0     Burger Joint  0.07
-1       Kids Store  0.07
-2      Wings Joint  0.07
-3    Burrito Place  0.07
-4  Supplement Shop  0.07
-
-
-----Harbourfront East, Union Station, Toronto Islands----
-               venue  freq
-0  Electronics Store  0.25
-1            Airport  0.25
-2               Park  0.25
-3           Bus Stop  0.25
-4        Yoga Studio  0.00
-
-
-----High Park, The Junction South----
-                 venue  freq
-0         Intersection  0.12
-1    Electronics Store  0.12
-2                 Bank  0.12
-3           Restaurant  0.12
-4  Rental Car Location  0.12
-
-
-----Hillcrest Village----
-                    venue  freq
-0       Indian Restaurant  0.29
-1  Furniture / Home Store  0.14
-2               Pet Store  0.14
-3      Light Rail Station  0.14
-4   Vietnamese Restaurant  0.14
-
-
-----Humber Summit----
-                        venue  freq
-0        Fast Food Restaurant   1.0
-1                 Yoga Studio   0.0
-2                 Men's Store   0.0
-3  Modern European Restaurant   0.0
-4           Mobile Phone Shop   0.0
-
-
-----Humberlea, Emery----
-                venue  freq
-0  Mexican Restaurant  0.08
-1                Café  0.08
-2     Thai Restaurant  0.08
-3      Discount Store  0.04
-4         Music Venue  0.04
-
-
-----Humewood-Cedarvale----
-                       venue  freq
-0                   Pharmacy  0.12
-1                     Bakery  0.12
-2                Music Venue  0.06
-3                  Pet Store  0.06
-4  Middle Eastern Restaurant  0.06
-
-
-----India Bazaar, The Beaches West----
-                venue  freq
-0  Italian Restaurant  0.09
-1      Sandwich Place  0.09
-2         Coffee Shop  0.09
-3   Indian Restaurant  0.04
-4      Breakfast Spot  0.04
-
-
-----Islington Avenue, Humber Valley Village----
-         venue  freq
-0   Restaurant  0.07
-1  Coffee Shop  0.07
-2         Café  0.04
-3         Park  0.04
-4  Pizza Place  0.04
-
-
-----Kennedy Park, Ionview, East Birchmount Park----
-                   venue  freq
-0            Coffee Shop   0.4
-1  Korean BBQ Restaurant   0.2
-2           Soccer Field   0.2
-3      Indian Restaurant   0.2
-4          Metro Station   0.0
-
-
-----Kensington Market, Chinatown, Grange Park----
-            venue  freq
-0  Clothing Store  0.14
-1     Coffee Shop  0.10
-2     Yoga Studio  0.05
-3           Diner  0.05
-4            Park  0.05
-
-
-----Kingsview Village, St. Phillips, Martin Grove Gardens, Richview Gardens----
-                       venue  freq
-0             Clothing Store  0.10
-1                Coffee Shop  0.09
-2                      Hotel  0.03
-3             Cosmetics Shop  0.03
-4  Middle Eastern Restaurant  0.03
-
-
-----Lawrence Manor, Lawrence Heights----
-         venue  freq
-0  Coffee Shop  0.18
-1         Park  0.07
-2       Bakery  0.07
-3         Café  0.04
-4          Pub  0.04
-
-
-----Lawrence Park----
-                 venue  freq
-0                 Café  0.07
-1          Coffee Shop  0.06
-2            Gastropub  0.04
-3         Cocktail Bar  0.04
-4  Moroccan Restaurant  0.02
-
-
-----Leaside----
-                 venue  freq
-0               Garden  0.33
-1       Ice Cream Shop  0.33
-2         Home Service  0.33
-3   Mexican Restaurant  0.00
-4  Monument / Landmark  0.00
-
-
-----Little Portugal, Trinity----
-                       venue  freq
-0                     Lounge   0.2
-1             Breakfast Spot   0.2
-2               Skating Rink   0.2
-3  Latin American Restaurant   0.2
-4             Clothing Store   0.2
-
-
-----Malvern, Rouge----
-                  venue  freq
-0   Fried Chicken Joint  0.12
-1                Bakery  0.12
-2           Gas Station  0.12
-3  Caribbean Restaurant  0.12
-4       Thai Restaurant  0.12
-
-
-----Milliken, Agincourt North, Steeles East, L'Amoreaux East----
-                  venue  freq
-0                  Park  0.10
-1  Fast Food Restaurant  0.10
-2    Italian Restaurant  0.05
-3             Pet Store  0.05
-4                   Pub  0.05
-
-
-----Mimico NW, The Queensway West, South of Bloor, Kingsway Park South West, Royal York South West----
-            venue  freq
-0          Bakery  0.22
-1   Metro Station  0.11
-2    Soccer Field  0.11
-3  Ice Cream Shop  0.11
-4        Bus Line  0.11
-
-
-----Moore Park, Summerhill East----
-            venue  freq
-0            Café  0.13
-1          Bakery  0.09
-2  Breakfast Spot  0.09
-3     Coffee Shop  0.09
-4       Nightclub  0.04
-
-
-----New Toronto, Mimico South, Humber Bay Shores----
-                venue  freq
-0         Pizza Place  0.29
-1         Coffee Shop  0.14
-2  Chinese Restaurant  0.14
-3      Sandwich Place  0.14
-4      Discount Store  0.14
-
-
-----North Park, Maple Leaf Park, Upwood Park----
-               venue  freq
-0              Field  0.25
-1              Trail  0.25
-2       Tennis Court  0.25
-3       Hockey Arena  0.25
-4  Mobile Phone Shop  0.00
-
-
-----North Toronto West,  Lawrence Park----
-                  venue  freq
-0  Caribbean Restaurant   0.2
-1        Massage Studio   0.2
-2                   Bar   0.2
-3           Coffee Shop   0.2
-4    Miscellaneous Shop   0.2
-
-
-----Northwest, West Humber - Clairville----
-                        venue  freq
-0      Furniture / Home Store  0.33
-1  Construction & Landscaping  0.33
-2                Intersection  0.33
-3                 Yoga Studio  0.00
-4          Mexican Restaurant  0.00
-
-
-----Northwood Park, York University----
-                 venue  freq
-0          Coffee Shop  0.14
-1   Light Rail Station  0.07
-2                  Pub  0.07
-3         Liquor Store  0.07
-4  Fried Chicken Joint  0.07
-
-
-----Old Mill South, King's Mill Park, Sunnylea, Humber Bay, Mimico NE, The Queensway East, Royal York South East, Kingsway Park South East----
-                           venue  freq
-0                            Bar  0.14
-1                           Café  0.05
-2  Vegetarian / Vegan Restaurant  0.05
-3                    Men's Store  0.05
-4                     Restaurant  0.05
-
-
-----Parkdale, Roncesvalles----
-                        venue  freq
-0                        Park  0.25
-1  Construction & Landscaping  0.25
-2                        Pool  0.25
-3           Food & Drink Shop  0.25
-4                 Yoga Studio  0.00
-
-
-----Parkview Hill, Woodbine Gardens----
-                 venue  freq
-0          Pizza Place  0.17
-1                  Pub  0.17
-2                 Park  0.17
-3               Bakery  0.17
-4  Japanese Restaurant  0.17
-
-
-----Parkwoods----
-               venue  freq
-0        Pizza Place  0.25
-1  Convenience Store  0.25
-2      Grocery Store  0.25
-3            Brewery  0.25
-4        Yoga Studio  0.00
-
-
-----Queen's Park, Ontario Provincial Government----
-                 venue  freq
-0                 Café  0.25
-1  Japanese Restaurant  0.25
-2                 Bank  0.25
-3   Chinese Restaurant  0.25
-4  Monument / Landmark  0.00
-
-
-----Regent Park, Harbourfront----
-                venue  freq
-0         Coffee Shop  0.18
-1                Café  0.05
-2  Italian Restaurant  0.05
-3      Sandwich Place  0.05
-4         Salad Place  0.03
-
-
-----Richmond, Adelaide, King----
-                 venue  freq
-0          Coffee Shop  0.08
-1  Japanese Restaurant  0.06
-2     Sushi Restaurant  0.06
-3              Gay Bar  0.04
-4           Restaurant  0.04
-
-
-----Rosedale----
-                        venue  freq
-0                        Park   1.0
-1                 Yoga Studio   0.0
-2                 Men's Store   0.0
-3  Modern European Restaurant   0.0
-4           Mobile Phone Shop   0.0
-
-
-----Roselawn----
-            venue  freq
-0     Coffee Shop  0.11
-1            Café  0.05
-2      Restaurant  0.04
-3  Clothing Store  0.04
-4           Hotel  0.03
-
-
-----Runnymede, Swansea----
-                      venue  freq
-0               Coffee Shop  0.23
-1                     Hotel  0.15
-2              Intersection  0.08
-3  Mediterranean Restaurant  0.08
-4            Sandwich Place  0.08
-
-
-----Scarborough Village----
-               venue  freq
-0        Coffee Shop  0.14
-1     Sandwich Place  0.14
-2               Café  0.14
-3     History Museum  0.05
-4  Indian Restaurant  0.05
-
-
-----South Steeles, Silverstone, Humbergate, Jamestown, Mount Olive, Beaumond Heights, Thistletown, Albion Gardens----
-          venue  freq
-0   Coffee Shop  0.08
-1  Cocktail Bar  0.05
-2        Bakery  0.05
-3      Beer Bar  0.03
-4   Cheese Shop  0.03
-
-
-----St. James Town----
-         venue  freq
-0  Coffee Shop  0.13
-1     Aquarium  0.05
-2         Café  0.04
-3        Hotel  0.04
-4   Restaurant  0.03
-
-
-----St. James Town, Cabbagetown----
-         venue  freq
-0         Park  0.50
-1   Playground  0.25
-2        Trail  0.25
-3  Yoga Studio  0.00
-4  Men's Store  0.00
-
-
-----Steeles West, L'Amoreaux West----
-                  venue  freq
-0           Coffee Shop  0.15
-1  Fast Food Restaurant  0.15
-2              Pharmacy  0.08
-3           Supermarket  0.08
-4        Sandwich Place  0.08
-
-
-----Stn A PO Boxes----
-           venue  freq
-0    Pizza Place   0.2
-1  Grocery Store   0.2
-2        Butcher   0.2
-3    Coffee Shop   0.2
-4       Pharmacy   0.2
-
-
-----Studio District----
-                        venue  freq
-0              Sandwich Place   0.5
-1           Mobile Phone Shop   0.5
-2                 Yoga Studio   0.0
-3               Metro Station   0.0
-4  Modern European Restaurant   0.0
-
-
-----Summerhill West, Rathnelly, South Hill, Forest Hill SE, Deer Park----
-              venue  freq
-0             Hotel   0.2
-1               Gym   0.1
-2    Sandwich Place   0.1
-3  Department Store   0.1
-4      Dance Studio   0.1
-
-
-----The Annex, North Midtown, Yorkville----
-                venue  freq
-0         Coffee Shop  0.11
-1               Hotel  0.08
-2                Café  0.05
-3          Restaurant  0.04
-4  Seafood Restaurant  0.03
-
-
-----The Beaches----
-                  venue  freq
-0  Caribbean Restaurant   0.2
-1   Japanese Restaurant   0.2
-2    Athletics & Sports   0.2
-3                   Gym   0.2
-4                  Café   0.2
-
-
-----The Danforth West, Riverdale----
-                    venue  freq
-0          Clothing Store  0.33
-1  Furniture / Home Store  0.17
-2                Boutique  0.08
-3       Accessories Store  0.08
-4   Vietnamese Restaurant  0.08
-
-
-----The Kingsway, Montgomery Road, Old Mill North----
-                      venue  freq
-0               Golf Course   0.2
-1      Fast Food Restaurant   0.2
-2                   Dog Run   0.2
-3                      Pool   0.2
-4  Mediterranean Restaurant   0.2
-
-
-----Thorncliffe Park----
-                 venue  freq
-0         Intersection  0.25
-1                Motel  0.25
-2         Skating Rink  0.25
-3  American Restaurant  0.25
-4        Metro Station  0.00
-
-
-----Toronto Dominion Centre, Design Exchange----
-                        venue  freq
-0              Baseball Field   1.0
-1                 Yoga Studio   0.0
-2               Metro Station   0.0
-3  Modern European Restaurant   0.0
-4           Mobile Phone Shop   0.0
-
-
-----University of Toronto, Harbord----
-                 venue  freq
-0          Coffee Shop  0.11
-1   Seafood Restaurant  0.04
-2               Bakery  0.03
-3   Italian Restaurant  0.03
-4  Japanese Restaurant  0.03
-
-
-----Upper Rouge----
-                 venue  freq
-0       Cosmetics Shop  0.08
-1  American Restaurant  0.08
-2          Flower Shop  0.08
-3         Liquor Store  0.08
-4   Seafood Restaurant  0.08
-
-
-----Victoria Village----
-                 venue  freq
-0        Grocery Store   0.2
-1          Pizza Place   0.1
-2  Japanese Restaurant   0.1
-3          Coffee Shop   0.1
-4       Sandwich Place   0.1
-
-
-----West Deane Park, Princess Gardens, Martin Grove, Islington, Cloverdale----
-                        venue  freq
-0                        Park   1.0
-1                 Yoga Studio   0.0
-2                 Men's Store   0.0
-3  Modern European Restaurant   0.0
-4           Mobile Phone Shop   0.0
-
-
-----Westmount----
-              venue  freq
-0  Ramen Restaurant  0.09
-1        Restaurant  0.06
-2              Café  0.06
-3    Sandwich Place  0.06
-4       Coffee Shop  0.06
-
-
-----Weston----
-                  venue  freq
-0           Yoga Studio  0.06
-1         Auto Workshop  0.06
-2  Gym / Fitness Center  0.06
-3         Garden Center  0.06
-4                Garden  0.06
-
-
-----Wexford, Maryvale----
-                        venue  freq
-0                      Bakery   1.0
-1                 Yoga Studio   0.0
-2               Metro Station   0.0
-3  Modern European Restaurant   0.0
-4           Mobile Phone Shop   0.0
-
-
-----Willowdale, Newtonbrook----
-                  venue  freq
-0           Pizza Place  0.17
-1  Fast Food Restaurant  0.17
-2   Rental Car Location  0.08
-3   Fried Chicken Joint  0.08
-4                  Bank  0.08
-
-
-----Willowdale, Willowdale East----
-                 venue  freq
-0                 Café  0.16
-1                  Bar  0.06
-2            Bookstore  0.06
-3               Bakery  0.06
-4  Japanese Restaurant  0.06
-
-
-----Willowdale, Willowdale West----
-               venue  freq
-0         Restaurant  0.25
-1  Convenience Store  0.25
-2     Sandwich Place  0.25
-3     Discount Store  0.25
-4        Yoga Studio  0.00
-
-
-----Woburn----
-                 venue  freq
-0          Coffee Shop  0.11
-1                 Café  0.07
-2                Hotel  0.05
-3           Restaurant  0.05
-4  Japanese Restaurant  0.04
-
-
-----Woodbine Heights----
-                             venue  freq
-0                            River   0.5
-1                             Pool   0.5
-2                      Yoga Studio   0.0
-3               Mexican Restaurant   0.0
-4  Molecular Gastronomy Restaurant   0.0
-
-
-----York Mills West----
-            venue  freq
-0        Pharmacy  0.11
-1     Coffee Shop  0.11
-2    Liquor Store  0.11
-3      Beer Store  0.11
-4  Shopping Plaza  0.11
-
-
-----York Mills, Silver Hills----
-           venue  freq
-0  Grocery Store  0.24
-1           Café  0.18
-2           Park  0.12
-3     Baby Store  0.06
-4    Coffee Shop  0.06
-
-
-Pass that info into a pandas dataframe
-
-First, let's write a function to sort the venues in descending order.
-In [145]:
-
-def return_most_common_venues(row, num_top_venues):
-    row_categories = row.iloc[1:]
-    row_categories_sorted = row_categories.sort_values(ascending=False)
-    
-    return row_categories_sorted.index.values[0:num_top_venues]
-
-Now the new dataframe and with it we'll display the top 10 venues for each neighborhood.
-In [146]:
-
-num_top_venues = 10
-
-indicators = ['st', 'nd', 'rd']
-
-# create columns according to number of top venues
-columns = ['Neighborhood']
-for ind in np.arange(num_top_venues):
-    try:
-        columns.append('{}{} Most Common Venue'.format(ind+1, indicators[ind]))
-    except:
-        columns.append('{}th Most Common Venue'.format(ind+1))
-
-# create a new dataframe
-neighborhoods_venues_sorted = pd.DataFrame(columns=columns)
-neighborhoods_venues_sorted['Neighborhood'] = toronto_grouped['Neighborhood']
-
-for ind in np.arange(toronto_grouped.shape[0]):
-    neighborhoods_venues_sorted.iloc[ind, 1:] = return_most_common_venues(toronto_grouped.iloc[ind, :], num_top_venues)
-
-neighborhoods_venues_sorted.head()
-
-Out[146]:
-	Neighborhood 	1st Most Common Venue 	2nd Most Common Venue 	3rd Most Common Venue 	4th Most Common Venue 	5th Most Common Venue 	6th Most Common Venue 	7th Most Common Venue 	8th Most Common Venue 	9th Most Common Venue 	10th Most Common Venue
-0 	Agincourt 	Coffee Shop 	Restaurant 	Café 	Hotel 	Italian Restaurant 	Gym 	Cocktail Bar 	Seafood Restaurant 	Japanese Restaurant 	Deli / Bodega
-1 	Alderwood, Long Branch 	Coffee Shop 	Diner 	Sushi Restaurant 	Yoga Studio 	Bar 	Beer Bar 	Smoothie Shop 	Sandwich Place 	Burrito Place 	Restaurant
-2 	Bathurst Manor, Wilson Heights, Downsview North 	Pizza Place 	Sandwich Place 	Skating Rink 	Gym 	Coffee Shop 	Pharmacy 	Dance Studio 	Athletics & Sports 	Pub 	Women's Store
-3 	Bayview Village 	Breakfast Spot 	Gift Shop 	Dog Run 	Bar 	Restaurant 	Bookstore 	Dessert Shop 	Coffee Shop 	Eastern European Restaurant 	Cuban Restaurant
-4 	Bedford Park, Lawrence Manor East 	Park 	Construction & Landscaping 	Convenience Store 	Dumpling Restaurant 	Discount Store 	Distribution Center 	Dog Run 	Doner Restaurant 	Donut Shop 	Drugstore
-Here, we're going to CLUSTER the NEIGHBORHOODS
-
-Run k-means to cluest the neighborhood into 5 clusters
-In [166]:
-
-toronto_grouped.head(50)
-
-Out[166]:
-	Neighborhood 	Yoga Studio 	Accessories Store 	Adult Boutique 	Airport 	Airport Food Court 	Airport Lounge 	Airport Service 	Airport Terminal 	American Restaurant 	... 	Trail 	Train Station 	Truck Stop 	Vegetarian / Vegan Restaurant 	Video Game Store 	Vietnamese Restaurant 	Warehouse Store 	Wine Bar 	Wings Joint 	Women's Store
-0 	Agincourt 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.030000 	... 	0.000000 	0.0 	0.000000 	0.020000 	0.000000 	0.000000 	0.000000 	0.010000 	0.000000 	0.000000
-1 	Alderwood, Long Branch 	0.032258 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-2 	Bathurst Manor, Wilson Heights, Downsview North 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-3 	Bayview Village 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-4 	Bedford Park, Lawrence Manor East 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-5 	Berczy Park 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-6 	Birch Cliff, Cliffside West 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-7 	Brockton, Parkdale Village, Exhibition Place 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.015873 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.015873 	0.000000 	0.000000 	0.000000 	0.000000 	0.031746
-8 	Business reply mail Processing Centre, South C... 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-9 	CN Tower, King and Spadina, Railway Lands, Har... 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.333333 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-10 	Caledonia-Fairbanks 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.049180 	0.000000 	0.049180 	0.000000 	0.016393 	0.000000 	0.000000
-11 	Canada Post Gateway Processing Centre 	0.000000 	0.0 	0.0 	0.0625 	0.0625 	0.0625 	0.1875 	0.125 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-12 	Cedarbrae 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.250000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-13 	Central Bay Street 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-14 	Christie 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-15 	Church and Wellesley 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-16 	Clarks Corners, Tam O'Shanter, Sullivan 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.250000
-17 	Cliffside, Cliffcrest, Scarborough Village West 	0.027027 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.054054 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-18 	Commerce Court, Victoria Hotel 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-19 	Davisville 	0.045455 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.045455 	0.000000 	0.000000 	0.000000
-20 	Davisville North 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-21 	Del Ray, Mount Dennis, Keelsdale and Silverthorn 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-22 	Don Mills 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-23 	Downsview 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.058824 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-24 	Dufferin, Dovercourt Village 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-25 	East Toronto, Broadview North (Old East York) 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-26 	Eringate, Bloordale Gardens, Old Burnhamthorpe... 	0.023256 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.023256 	... 	0.023256 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-27 	Fairview, Henry Farm, Oriole 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-28 	First Canadian Place, Underground city 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-29 	Forest Hill North & West, Forest Hill Road Park 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-30 	Garden District, Ryerson 	0.029412 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.029412 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-31 	Glencairn 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-32 	Golden Mile, Clairlea, Oakridge 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-33 	Guildwood, Morningside, West Hill 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.071429 	0.000000
-34 	Harbourfront East, Union Station, Toronto Islands 	0.000000 	0.0 	0.0 	0.2500 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-35 	High Park, The Junction South 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-36 	Hillcrest Village 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.142857 	0.000000 	0.000000 	0.000000 	0.000000
-37 	Humber Summit 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-38 	Humberlea, Emery 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-39 	Humewood-Cedarvale 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-40 	India Bazaar, The Beaches West 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.043478 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-41 	Islington Avenue, Humber Valley Village 	0.022222 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-42 	Kennedy Park, Ionview, East Birchmount Park 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-43 	Kensington Market, Chinatown, Grange Park 	0.047619 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-44 	Kingsview Village, St. Phillips, Martin Grove ... 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.010000 	0.000000 	0.010000 	0.000000 	0.000000
-45 	Lawrence Manor, Lawrence Heights 	0.022222 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-46 	Lawrence Park 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.024390 	... 	0.000000 	0.0 	0.000000 	0.012195 	0.000000 	0.000000 	0.000000 	0.012195 	0.000000 	0.000000
-47 	Leaside 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-48 	Little Portugal, Trinity 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-49 	Malvern, Rouge 	0.000000 	0.0 	0.0 	0.0000 	0.0000 	0.0000 	0.0000 	0.000 	0.000000 	... 	0.000000 	0.0 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000 	0.000000
-
-50 rows × 274 columns
-In [ ]:
-
-
-In [173]:
-
-# set number of clusters
-kclusters = 3
-
-toronto_grouped_clustering = toronto_grouped.drop('Neighborhood', 1)
-
-# run k-means clustering
-kmeans = KMeans(n_clusters=kclusters, random_state=0).fit(toronto_grouped_clustering)
-
-# check cluster labels generated for each row in the dataframe
-kmeans.labels_[0:10]
-
-Out[173]:
-
-array([0, 0, 0, 0, 2, 0, 0, 0, 2, 0], dtype=int32)
-
-In [ ]:
-
-
-In [178]:
-
-# add clustering labels
-#neighborhoods_venues_sorted.insert(0, 'Cluster Labels', kmeans.labels_)
-
-toronto_merged = toronto_data
-
-# merge manhattan_grouped with toronto_data to add latitude/longitude for each neighborhood
-toronto_merged = toronto_merged.join(neighborhoods_venues_sorted.set_index('Neighborhood'), on='Neighborhood',how ='inner')
-
-toronto_merged.head() # check the last columns!
-
-Out[178]:
-	PostalCode 	Borough 	Neighborhood 	Latitude 	Longitude 	Cluster Labels 	1st Most Common Venue 	2nd Most Common Venue 	3rd Most Common Venue 	4th Most Common Venue 	5th Most Common Venue 	6th Most Common Venue 	7th Most Common Venue 	8th Most Common Venue 	9th Most Common Venue 	10th Most Common Venue
-4 	M1B 	Scarborough 	Malvern, Rouge 	43.773136 	-79.239476 	0 	Bakery 	Bank 	Hakka Restaurant 	Caribbean Restaurant 	Athletics & Sports 	Fried Chicken Joint 	Thai Restaurant 	Gas Station 	Doner Restaurant 	Distribution Center
-92 	M1E 	Scarborough 	Guildwood, Morningside, West Hill 	43.628841 	-79.520999 	0 	Gym 	Kids Store 	Discount Store 	Tanning Salon 	Burrito Place 	Sandwich Place 	Burger Joint 	Bakery 	Supplement Shop 	Convenience Store
-70 	M1G 	Scarborough 	Woburn 	43.648429 	-79.382280 	0 	Coffee Shop 	Café 	Hotel 	Restaurant 	Japanese Restaurant 	Gym 	Steakhouse 	Salad Place 	American Restaurant 	Asian Restaurant
-37 	M1H 	Scarborough 	Cedarbrae 	43.676357 	-79.293031 	0 	Trail 	Health Food Store 	Pub 	Drugstore 	Diner 	Discount Store 	Distribution Center 	Dog Run 	Doner Restaurant 	Donut Shop
-65 	M1J 	Scarborough 	Scarborough Village 	43.672710 	-79.405678 	0 	Coffee Shop 	Café 	Sandwich Place 	Park 	BBQ Joint 	History Museum 	Indian Restaurant 	Liquor Store 	Donut Shop 	Middle Eastern Restaurant
-In [196]:
-
-toronto_merged['Cluster Labels'].value_counts()
-
-Out[196]:
-
-0    91
-1     5
-2     2
-4     1
-3     1
-Name: Cluster Labels, dtype: int64
-
-Let's visualize this stuff man! Come on! But first, make sure you have the necessary libraries.
-In [183]:
-
-import matplotlib.cm as cm
-import matplotlib.colors as colors
-
-In [200]:
-
-# create map
-map_clusters = folium.Map(location=[latitude, longitude], zoom_start=10)
-
-# set color scheme for the clusters
-x = np.arange(kclusters)
-ys = [i + x + (i*x)**2 for i in range(kclusters)]
-colors_array = cm.rainbow(np.linspace(0, 1, len(ys)))
-rainbow = [colors.rgb2hex(i) for i in colors_array]
-
-# add markers to the map
-markers_colors = []
-for lat, lon, poi, cluster in zip(toronto_merged['Latitude'], toronto_merged['Longitude'], toronto_merged['Neighborhood'], toronto_merged['Cluster Labels']):
-    label = folium.Popup(str(poi) + ' Cluster ' + str(cluster), parse_html=True)
-    folium.CircleMarker(
-        [lat, lon],
-        radius=5,
-        popup=label,
-        color='blue',
-        fill=True,
-        fill_color='blue',
-        fill_opacity=0.7).add_to(map_clusters)
-       
-map_clusters
-
-Out[200]:
-Make this Notebook Trusted to load map: File -> Trust Notebook
-In [197]:
-
-toronto_merged.loc[toronto_merged['Cluster Labels'] == 0, toronto_merged.columns[[1] + list(range(5, toronto_merged.shape[1]))]]
-
-Out[197]:
-	Borough 	Cluster Labels 	1st Most Common Venue 	2nd Most Common Venue 	3rd Most Common Venue 	4th Most Common Venue 	5th Most Common Venue 	6th Most Common Venue 	7th Most Common Venue 	8th Most Common Venue 	9th Most Common Venue 	10th Most Common Venue
-4 	Scarborough 	0 	Bakery 	Bank 	Hakka Restaurant 	Caribbean Restaurant 	Athletics & Sports 	Fried Chicken Joint 	Thai Restaurant 	Gas Station 	Doner Restaurant 	Distribution Center
-92 	Scarborough 	0 	Gym 	Kids Store 	Discount Store 	Tanning Salon 	Burrito Place 	Sandwich Place 	Burger Joint 	Bakery 	Supplement Shop 	Convenience Store
-70 	Scarborough 	0 	Coffee Shop 	Café 	Hotel 	Restaurant 	Japanese Restaurant 	Gym 	Steakhouse 	Salad Place 	American Restaurant 	Asian Restaurant
-37 	Scarborough 	0 	Trail 	Health Food Store 	Pub 	Drugstore 	Diner 	Discount Store 	Distribution Center 	Dog Run 	Doner Restaurant 	Donut Shop
-65 	Scarborough 	0 	Coffee Shop 	Café 	Sandwich Place 	Park 	BBQ Joint 	History Museum 	Indian Restaurant 	Liquor Store 	Donut Shop 	Middle Eastern Restaurant
-... 	... 	... 	... 	... 	... 	... 	... 	... 	... 	... 	... 	...
-87 	York 	0 	Yoga Studio 	Auto Workshop 	Gym / Fitness Center 	Garden Center 	Garden 	Fast Food Restaurant 	Farmers Market 	Light Rail Station 	Comic Shop 	Pizza Place
-22 	Etobicoke 	0 	Ramen Restaurant 	Coffee Shop 	Pizza Place 	Sandwich Place 	Café 	Restaurant 	Plaza 	Shopping Mall 	Hotel 	Steakhouse
-54 	Etobicoke 	0 	Clothing Store 	Coffee Shop 	Café 	Cosmetics Shop 	Italian Restaurant 	Bubble Tea Shop 	Hotel 	Middle Eastern Restaurant 	Japanese Restaurant 	Fast Food Restaurant
-56 	Etobicoke 	0 	Coffee Shop 	Cocktail Bar 	Bakery 	Seafood Restaurant 	Beer Bar 	Restaurant 	Farmers Market 	Cheese Shop 	Pharmacy 	Sandwich Place
-96 	Etobicoke 	0 	Intersection 	Construction & Landscaping 	Furniture / Home Store 	Women's Store 	Drugstore 	Discount Store 	Distribution Center 	Dog Run 	Doner Restaurant 	Donut Shop
-
-91 rows × 12 columns
-Cluster 2
-In [198]:
-
-toronto_merged.loc[toronto_merged['Cluster Labels'] == 1, toronto_merged.columns[[1] + list(range(5, toronto_merged.shape[1]))]]
-
-Out[198]:
-	Borough 	Cluster Labels 	1st Most Common Venue 	2nd Most Common Venue 	3rd Most Common Venue 	4th Most Common Venue 	5th Most Common Venue 	6th Most Common Venue 	7th Most Common Venue 	8th Most Common Venue 	9th Most Common Venue 	10th Most Common Venue
-74 	Scarborough 	1 	Park 	Pool 	Women's Store 	Greek Restaurant 	Deli / Bodega 	Escape Room 	Electronics Store 	Eastern European Restaurant 	Dumpling Restaurant 	Drugstore
-21 	Downtown Toronto 	1 	Park 	Drugstore 	Diner 	Discount Store 	Distribution Center 	Dog Run 	Doner Restaurant 	Donut Shop 	Dumpling Restaurant 	College Stadium
-50 	Downtown Toronto 	1 	Park 	Playground 	Trail 	Ethiopian Restaurant 	Escape Room 	Electronics Store 	Event Space 	Eastern European Restaurant 	Dumpling Restaurant 	Department Store
-40 	Downtown Toronto 	1 	Park 	Convenience Store 	Dumpling Restaurant 	Discount Store 	Distribution Center 	Dog Run 	Doner Restaurant 	Donut Shop 	Drugstore 	Eastern European Restaurant
-98 	Etobicoke 	1 	Park 	Drugstore 	Diner 	Discount Store 	Distribution Center 	Dog Run 	Doner Restaurant 	Donut Shop 	Dumpling Restaurant 	College Stadium
-Cluster 3
-In [201]:
-
-toronto_merged.loc[toronto_merged['Cluster Labels'] == 2, toronto_merged.columns[[1] + list(range(5, toronto_merged.shape[1]))]]
-
-Out[201]:
-	Borough 	Cluster Labels 	1st Most Common Venue 	2nd Most Common Venue 	3rd Most Common Venue 	4th Most Common Venue 	5th Most Common Venue 	6th Most Common Venue 	7th Most Common Venue 	8th Most Common Venue 	9th Most Common Venue 	10th Most Common Venue
-91 	Downtown Toronto 	2 	Baseball Field 	Women's Store 	Discount Store 	Distribution Center 	Dog Run 	Doner Restaurant 	Donut Shop 	Drugstore 	Dumpling Restaurant 	Fast Food Restaurant
-97 	Central Toronto 	2 	Paper / Office Supplies Store 	Baseball Field 	Women's Store 	Drugstore 	Discount Store 	Distribution Center 	Dog Run 	Doner Restaurant 	Donut Shop 	Dumpling Restaurant
-Cluster 4
-In [202]:
-
-toronto_merged.loc[toronto_merged['Cluster Labels'] == 3, toronto_merged.columns[[1] + list(range(5, toronto_merged.shape[1]))]]
-
-Out[202]:
-	Borough 	Cluster Labels 	1st Most Common Venue 	2nd Most Common Venue 	3rd Most Common Venue 	4th Most Common Venue 	5th Most Common Venue 	6th Most Common Venue 	7th Most Common Venue 	8th Most Common Venue 	9th Most Common Venue 	10th Most Common Venue
-1 	North York 	3 	Bar 	Women's Store 	Drugstore 	Discount Store 	Distribution Center 	Dog Run 	Doner Restaurant 	Donut Shop 	Dumpling Restaurant 	Fast Food Restaurant
-Cluster 5
-In [203]:
-
-toronto_merged.loc[toronto_merged['Cluster Labels'] == 4, toronto_merged.columns[[1] + list(range(5, toronto_merged.shape[1]))]]
-
-Out[203]:
-	Borough 	Cluster Labels 	1st Most Common Venue 	2nd Most Common Venue 	3rd Most Common Venue 	4th Most Common Venue 	5th Most Common Venue 	6th Most Common Venue 	7th Most Common Venue 	8th Most Common Venue 	9th Most Common Venue 	10th Most Common Venue
-0 	North York 	4 	Fast Food Restaurant 	Drugstore 	Diner 	Discount Store 	Distribution Center 	Dog Run 	Doner Restaurant 	Donut Shop 	Dumpling Restaurant 	Hakka Restaurant
-In [ ]:
-
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "<h1> Postal Codes in Canada </h1>"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "<h2> Part 1 </h2>"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Firstly, import all the necessary libraries. "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# import all necessary libraries\n",
+    "import pandas as pd\n",
+    "import numpy as np\n",
+    "from bs4 import BeautifulSoup\n",
+    "import requests"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Now I can set url and request the html text from wikipedia. Then I will print the html to see what it looks like. \n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "url = 'https://en.wikipedia.org/wiki/List_of_postal_codes_of_Canada:_M'\n",
+    "\n",
+    "html = requests.get(url).text\n",
+    "#html"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "We want to parse this mess to find the tables in the website. That's where our data will be. "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "3"
+      ]
+     },
+     "execution_count": 4,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# parse the data and find_all of the tables on the website\n",
+    "soup = BeautifulSoup(html, 'html5lib')\n",
+    "tables = soup.find_all('table')\n",
+    "len(tables)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "It appears there are a few tables on the webite, so we'll have to find the correct table index to get our info. "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "0\n"
+     ]
+    }
+   ],
+   "source": [
+    "# since there are 3 tables, find out which table the data is in\n",
+    "for index, table in enumerate(tables):\n",
+    "    if (\"wikitable\" in str(table)):\n",
+    "        table_index = index\n",
+    "print(table_index)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Now, we can get all the info needed and put it into a dataframe. \n",
+    "First, make an empty dataframe named <code> postal_codes </code> \n",
+    "\n",
+    "Then, find all the <code> tr </code> and the <code> td </code> within the HTML, strip the necessary parts and pop them into the dataframe. "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>PostalCode</th>\n",
+       "      <th>Borough</th>\n",
+       "      <th>Neighborhood</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <td>0</td>\n",
+       "      <td>M1A</td>\n",
+       "      <td>Not assigned</td>\n",
+       "      <td>Not assigned</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>1</td>\n",
+       "      <td>M2A</td>\n",
+       "      <td>Not assigned</td>\n",
+       "      <td>Not assigned</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>2</td>\n",
+       "      <td>M3A</td>\n",
+       "      <td>North York</td>\n",
+       "      <td>Parkwoods</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>3</td>\n",
+       "      <td>M4A</td>\n",
+       "      <td>North York</td>\n",
+       "      <td>Victoria Village</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>4</td>\n",
+       "      <td>M5A</td>\n",
+       "      <td>Downtown Toronto</td>\n",
+       "      <td>Regent Park, Harbourfront</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>...</td>\n",
+       "      <td>...</td>\n",
+       "      <td>...</td>\n",
+       "      <td>...</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>175</td>\n",
+       "      <td>M5Z</td>\n",
+       "      <td>Not assigned</td>\n",
+       "      <td>Not assigned</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>176</td>\n",
+       "      <td>M6Z</td>\n",
+       "      <td>Not assigned</td>\n",
+       "      <td>Not assigned</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>177</td>\n",
+       "      <td>M7Z</td>\n",
+       "      <td>Not assigned</td>\n",
+       "      <td>Not assigned</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>178</td>\n",
+       "      <td>M8Z</td>\n",
+       "      <td>Etobicoke</td>\n",
+       "      <td>Mimico NW, The Queensway West, South of Bloor,...</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>179</td>\n",
+       "      <td>M9Z</td>\n",
+       "      <td>Not assigned</td>\n",
+       "      <td>Not assigned</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "<p>180 rows × 3 columns</p>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "    PostalCode           Borough  \\\n",
+       "0          M1A      Not assigned   \n",
+       "1          M2A      Not assigned   \n",
+       "2          M3A        North York   \n",
+       "3          M4A        North York   \n",
+       "4          M5A  Downtown Toronto   \n",
+       "..         ...               ...   \n",
+       "175        M5Z      Not assigned   \n",
+       "176        M6Z      Not assigned   \n",
+       "177        M7Z      Not assigned   \n",
+       "178        M8Z         Etobicoke   \n",
+       "179        M9Z      Not assigned   \n",
+       "\n",
+       "                                          Neighborhood  \n",
+       "0                                         Not assigned  \n",
+       "1                                         Not assigned  \n",
+       "2                                            Parkwoods  \n",
+       "3                                     Victoria Village  \n",
+       "4                            Regent Park, Harbourfront  \n",
+       "..                                                 ...  \n",
+       "175                                       Not assigned  \n",
+       "176                                       Not assigned  \n",
+       "177                                       Not assigned  \n",
+       "178  Mimico NW, The Queensway West, South of Bloor,...  \n",
+       "179                                       Not assigned  \n",
+       "\n",
+       "[180 rows x 3 columns]"
+      ]
+     },
+     "execution_count": 6,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# place all of the data into a dataframe\n",
+    "\n",
+    "postal_codes = pd.DataFrame(columns=[\"PostalCode\", \"Borough\", \"Neighborhood\"])\n",
+    "\n",
+    "for row in tables[table_index].tbody.find_all(\"tr\"): \n",
+    "    col = row.find_all(\"td\")\n",
+    "    if (col != []):\n",
+    "        code = col[0].text.strip()\n",
+    "        borough = col[1].text.strip()\n",
+    "        neighborhood = col[2].text.strip()\n",
+    "        postal_codes = postal_codes.append({\"PostalCode\":code, \"Borough\":borough, \"Neighborhood\":neighborhood}, ignore_index=True)\n",
+    "\n",
+    "postal_codes"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Save only the necessary data from the Borough, and lose the data that is not assigned or we can use"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# get ride of all the Boroughs that are not assigned\n",
+    "postal_codes = postal_codes[postal_codes.Borough != 'Not assigned']"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>PostalCode</th>\n",
+       "      <th>Borough</th>\n",
+       "      <th>Neighborhood</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <td>0</td>\n",
+       "      <td>M3A</td>\n",
+       "      <td>North York</td>\n",
+       "      <td>Parkwoods</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>1</td>\n",
+       "      <td>M4A</td>\n",
+       "      <td>North York</td>\n",
+       "      <td>Victoria Village</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>2</td>\n",
+       "      <td>M5A</td>\n",
+       "      <td>Downtown Toronto</td>\n",
+       "      <td>Regent Park, Harbourfront</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>3</td>\n",
+       "      <td>M6A</td>\n",
+       "      <td>North York</td>\n",
+       "      <td>Lawrence Manor, Lawrence Heights</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>4</td>\n",
+       "      <td>M7A</td>\n",
+       "      <td>Downtown Toronto</td>\n",
+       "      <td>Queen's Park, Ontario Provincial Government</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>5</td>\n",
+       "      <td>M9A</td>\n",
+       "      <td>Etobicoke</td>\n",
+       "      <td>Islington Avenue, Humber Valley Village</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>6</td>\n",
+       "      <td>M1B</td>\n",
+       "      <td>Scarborough</td>\n",
+       "      <td>Malvern, Rouge</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>7</td>\n",
+       "      <td>M3B</td>\n",
+       "      <td>North York</td>\n",
+       "      <td>Don Mills</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>8</td>\n",
+       "      <td>M4B</td>\n",
+       "      <td>East York</td>\n",
+       "      <td>Parkview Hill, Woodbine Gardens</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>9</td>\n",
+       "      <td>M5B</td>\n",
+       "      <td>Downtown Toronto</td>\n",
+       "      <td>Garden District, Ryerson</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>10</td>\n",
+       "      <td>M6B</td>\n",
+       "      <td>North York</td>\n",
+       "      <td>Glencairn</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>11</td>\n",
+       "      <td>M9B</td>\n",
+       "      <td>Etobicoke</td>\n",
+       "      <td>West Deane Park, Princess Gardens, Martin Grov...</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "   PostalCode           Borough  \\\n",
+       "0         M3A        North York   \n",
+       "1         M4A        North York   \n",
+       "2         M5A  Downtown Toronto   \n",
+       "3         M6A        North York   \n",
+       "4         M7A  Downtown Toronto   \n",
+       "5         M9A         Etobicoke   \n",
+       "6         M1B       Scarborough   \n",
+       "7         M3B        North York   \n",
+       "8         M4B         East York   \n",
+       "9         M5B  Downtown Toronto   \n",
+       "10        M6B        North York   \n",
+       "11        M9B         Etobicoke   \n",
+       "\n",
+       "                                         Neighborhood  \n",
+       "0                                           Parkwoods  \n",
+       "1                                    Victoria Village  \n",
+       "2                           Regent Park, Harbourfront  \n",
+       "3                    Lawrence Manor, Lawrence Heights  \n",
+       "4         Queen's Park, Ontario Provincial Government  \n",
+       "5             Islington Avenue, Humber Valley Village  \n",
+       "6                                      Malvern, Rouge  \n",
+       "7                                           Don Mills  \n",
+       "8                     Parkview Hill, Woodbine Gardens  \n",
+       "9                            Garden District, Ryerson  \n",
+       "10                                          Glencairn  \n",
+       "11  West Deane Park, Princess Gardens, Martin Grov...  "
+      ]
+     },
+     "execution_count": 8,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# reset the index \n",
+    "postal_codes = postal_codes.reset_index(drop=True)\n",
+    "postal_codes.head(12)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>PostalCode</th>\n",
+       "      <th>Borough</th>\n",
+       "      <th>Neighborhood</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <td>0</td>\n",
+       "      <td>M8V</td>\n",
+       "      <td>Etobicoke</td>\n",
+       "      <td>New Toronto, Mimico South, Humber Bay Shores</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>1</td>\n",
+       "      <td>M6H</td>\n",
+       "      <td>West Toronto</td>\n",
+       "      <td>Dufferin, Dovercourt Village</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>2</td>\n",
+       "      <td>M4C</td>\n",
+       "      <td>East York</td>\n",
+       "      <td>Woodbine Heights</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>3</td>\n",
+       "      <td>M3H</td>\n",
+       "      <td>North York</td>\n",
+       "      <td>Bathurst Manor, Wilson Heights, Downsview North</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>4</td>\n",
+       "      <td>M6A</td>\n",
+       "      <td>North York</td>\n",
+       "      <td>Lawrence Manor, Lawrence Heights</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "  PostalCode       Borough                                     Neighborhood\n",
+       "0        M8V     Etobicoke     New Toronto, Mimico South, Humber Bay Shores\n",
+       "1        M6H  West Toronto                     Dufferin, Dovercourt Village\n",
+       "2        M4C     East York                                 Woodbine Heights\n",
+       "3        M3H    North York  Bathurst Manor, Wilson Heights, Downsview North\n",
+       "4        M6A    North York                 Lawrence Manor, Lawrence Heights"
+      ]
+     },
+     "execution_count": 9,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "postal_codes = postal_codes.groupby(['PostalCode', 'Borough'])['Neighborhood'].apply(list)\n",
+    "\n",
+    "postal_codes = postal_codes.sample(frac=1).reset_index()\n",
+    "postal_codes['Neighborhood'] = postal_codes['Neighborhood'].str.join(',')\n",
+    "postal_codes.head()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "(103, 3)"
+      ]
+     },
+     "execution_count": 11,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "postal_codes.shape"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "That's it. Done for part 1 here. "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.7.4"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
 
